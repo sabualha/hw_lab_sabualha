@@ -1,0 +1,56 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Repository } from '../models/Repository';
+import { fetchRepositories } from '../models/repositoryService';
+
+// Pulled out as a pure function so we can unit-test it without any React plumbing.
+export function filterRepositories(repos: Repository[], searchText: string): Repository[] {
+  if (searchText.trim() === '') return repos;
+  const needle = searchText.toLowerCase();
+  return repos.filter((r) => r.name.toLowerCase().includes(needle));
+}
+
+export function useRepositories() {
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const fetched = await fetchRepositories();
+      if (!cancelled) {
+        setRepos(fetched);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    const fetched = await fetchRepositories();
+    // fetchRepositories returns [] on failure, so keep the old list in that case
+    if (fetched.length > 0) {
+      setRepos(fetched);
+    }
+    setRefreshing(false);
+  }, []);
+
+  const filteredRepos = useMemo(
+    () => filterRepositories(repos, searchText),
+    [repos, searchText]
+  );
+
+  return {
+    repos,
+    filteredRepos,
+    searchText,
+    setSearchText,
+    loading,
+    refreshing,
+    refresh,
+  };
+}
